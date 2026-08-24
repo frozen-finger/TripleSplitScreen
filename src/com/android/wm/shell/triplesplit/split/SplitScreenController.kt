@@ -42,6 +42,7 @@ import com.android.wm.shell.draganddrop.DragAndDropController
 import com.android.wm.shell.draganddrop.DragAndDropPolicy
 import com.android.wm.shell.sysui.ShellController
 import com.android.wm.shell.sysui.ShellInit
+import com.android.wm.shell.triplesplit.split.util.SplitIconProvider
 import com.android.wm.shell.triplesplit.split.HiddenApiWrapper.fromBundle
 import com.android.wm.shell.triplesplit.split.HiddenApiWrapper.getWindowingMode
 import com.android.wm.shell.triplesplit.split.HiddenApiWrapper.makeRemoteAnimation
@@ -262,6 +263,14 @@ class SplitScreenController(
         mStageCoordinator.exitSplitScreenOnHide(exitSplitScreenOnHide)
     }
 
+    fun moveSplitToBack() {
+        mStageCoordinator.moveSplitToBack()
+    }
+
+    fun restoreSplitToFront() {
+        mStageCoordinator.restoreSplitToFront()
+    }
+
     fun getStageBounds(outLeftBounds: Rect, outMiddleBounds: Rect, outRightBounds: Rect) {
         mStageCoordinator.getStageBounds(outLeftBounds, outMiddleBounds,
             outRightBounds)
@@ -303,6 +312,18 @@ class SplitScreenController(
 
     fun setStageDecorBitmap(@SplitScreenConstants.SplitIndex index: Int, bitmap: Bitmap?) {
         mStageCoordinator.setStageDecorBitmap(index, bitmap)
+    }
+
+    fun getSplitScreenPackageNames(@SplitScreenConstants.SplitIndex index: Int): List<String>? {
+        return mStageCoordinator.getSplitScreenPackageNames(index)
+    }
+
+    fun captureSplitScreen(): Bitmap? {
+        return mStageCoordinator.captureSplitScreen()
+    }
+
+    fun setSplitIconProvider(splitIconProvider: SplitIconProvider?) {
+        mStageCoordinator.setSplitIconProvider(splitIconProvider)
     }
 
     fun moveTaskToFullScreen(taskId: Int, @ExitReason exitReason: Int) {
@@ -633,6 +654,14 @@ class SplitScreenController(
             mainExecutor.execute { this@SplitScreenController.goToFullScreenFromSplit() }
         }
 
+        override fun moveSplitToBack() {
+            mainExecutor.execute { this@SplitScreenController.moveSplitToBack() }
+        }
+
+        override fun restoreSplitToFront() {
+            mainExecutor.execute { this@SplitScreenController.restoreSplitToFront() }
+        }
+
         override fun setSplitScreenFocus(index: Int) {
             mainExecutor.execute {
                 this@SplitScreenController.setSplitScreenFocus(index)
@@ -646,9 +675,27 @@ class SplitScreenController(
             }
         }
 
+        override fun isTaskInSplitScreen(taskId: Int): Boolean {
+            return this@SplitScreenController.isTaskInSplitScreen(taskId)
+        }
+
+        override fun getSplitScreenPackageNames(index: Int): List<String>? {
+            return this@SplitScreenController.getSplitScreenPackageNames(index)
+        }
+
         override fun setStageDecorBitmap(index: Int, bitmap: Bitmap?) {
             mainExecutor.execute {
                 this@SplitScreenController.setStageDecorBitmap(index, bitmap)
+            }
+        }
+
+        override fun captureSplitScreen(): Bitmap? {
+            return this@SplitScreenController.captureSplitScreen()
+        }
+
+        override fun setSplitIconProvider(splitIconProvider: SplitIconProvider?) {
+            mainExecutor.execute {
+                this@SplitScreenController.setSplitIconProvider(splitIconProvider)
             }
         }
 

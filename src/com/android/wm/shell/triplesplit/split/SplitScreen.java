@@ -13,6 +13,9 @@ import android.graphics.Rect;
 import android.os.Bundle;
 import android.window.WindowContainerTransaction;
 
+import com.android.wm.shell.triplesplit.split.util.SplitIconProvider;
+
+import java.util.List;
 import java.util.concurrent.Executor;
 
 public interface SplitScreen {
@@ -77,11 +80,30 @@ public interface SplitScreen {
 
     void exitSplitScreenOnHide(boolean exitSplitScreenOnHide);
 
+    /** Moves the current triple-split root behind fullscreen content without removing its tasks. */
+    void moveSplitToBack();
+
+    /** Restores a previously backgrounded triple-split root without relaunching its tasks. */
+    void restoreSplitToFront();
+
     void goToFullscreenFromSplit();
 
     void setSplitScreenFocus(int index);
 
     void moveTaskToFullscreen(int taskId);
 
+    boolean isTaskInSplitScreen(int taskId);
+
+    /** Returns package names currently hosted by one stage, or {@code null} when it is empty. */
+    @Nullable
+    List<String> getSplitScreenPackageNames(@SplitScreenConstants.SplitIndex int index);
+
     void setStageDecorBitmap(@SplitScreenConstants.SplitIndex int index, @Nullable Bitmap bitmap);
+
+    /** Captures the visible triple-split root, unless it is unavailable or contains secure layers. */
+    @Nullable
+    Bitmap captureSplitScreen();
+
+    /** Sets the icon/cover provider used by every stage during resize decor animations. */
+    void setSplitIconProvider(@Nullable SplitIconProvider splitIconProvider);
 }

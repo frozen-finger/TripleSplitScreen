@@ -76,6 +76,7 @@ import android.view.RemoteAnimationAdapter;
 import android.view.RemoteAnimationTarget;
 import android.view.SurfaceControl;
 import android.view.WindowManager;
+import android.window.ScreenCapture;
 import android.window.DisplayAreaInfo;
 import android.window.TransitionInfo;
 import android.window.TransitionRequestInfo;
@@ -100,6 +101,8 @@ import com.android.wm.shell.common.SyncTransactionQueue;
 import com.android.wm.shell.common.TransactionPool;
 import com.android.wm.shell.transition.LegacyTransitions;
 import com.android.wm.shell.transition.Transitions;
+import com.android.wm.shell.triplesplit.split.util.ComponentUtils;
+import com.android.wm.shell.triplesplit.split.util.SplitIconProvider;
 import com.android.wm.shell.triplesplit.split.view.OffscreenTouchZone;
 import com.android.wm.shell.triplesplit.split.view.TouchInterceptLayer;
 
@@ -532,6 +535,43 @@ public class StageCoordinator extends StageCoordinatorAbstract{
      */
     public void onHostActivityVisible() {
         restoreSplitToFrontIfValid("host_activity_visible");
+    }
+
+    /** Moves the existing split root behind fullscreen content without destroying stage tasks. */
+    public void moveSplitToBack() {
+        if (!isSplitActive()) {
+            setSplitsVisible(false);
+            Log.w(TAG, "skip moveSplitToBack, split is not active");
+            return;
+        }
+        final ActivityManager.RunningTaskInfo rootTaskInfo = mSplitMultiDisplayHelper
+                .getDisplayRootTaskInfo(DEFAULT_DISPLAY);
+        final SurfaceControl rootLeash = mSplitMultiDisplayHelper
+                .getDisplayRootTaskLeash(DEFAULT_DISPLAY);
+        if (rootTaskInfo == null || rootLeash == null || mSplitLayout == null) {
+            setSplitsVisible(false);
+            Log.w(TAG, "skip moveSplitToBack, rootTask=" + rootTaskInfo
+                    + " rootLeash=" + rootLeash + " layout=" + mSplitLayout);
+            return;
+        }
+
+        mSplitLayout.updateStateWithCurrentPosition();
+        final WindowContainerTransaction wct = new WindowContainerTransaction();
+        wct.reorder(rootTaskInfo.token, false);
+        setRootForceTranslucent(true, wct);
+        mSyncQueue.queue(wct);
+        mSyncQueue.runInSync(t -> {
+            setDividerVisibility(1, false, t);
+            setDividerVisibility(2, false, t);
+            t.hide(rootLeash);
+        });
+        setSplitsVisible(false);
+        Log.i(TAG, "moveSplitToBack splitState=" + mSplitState.get());
+    }
+
+    /** Restores an existing valid split root without relaunching its stage tasks. */
+    public boolean restoreSplitToFront() {
+        return restoreSplitToFrontIfValid("restore_split_to_front");
     }
 
     /**
@@ -2570,6 +2610,54 @@ public class StageCoordinator extends StageCoordinatorAbstract{
             return;
         }
         stage.setDecorBitmap(bitmap);
+    }
+
+    @Nullable
+    public List<String> getSplitScreenPackageNames(
+            @SplitScreenConstants.SplitIndex int index) {
+        final StageTaskListener stage = mStageOrderoperator.getStageForLegacyPosition(index,
+                true /* checkAllStagesIfNotActive */);
+        if (stage == null || stage.getChildCount() == 0) {
+            return null;
+        }
+        final List<String> packageNames = new ArrayList<>();
+        stage.doForAllChildTaskInfos(taskInfo -> {
+            final String packageName = ComponentUtils.getPackageName(taskInfo);
+            if (packageName != null) {
+                packageNames.add(packageName);
+            }
+        });
+        return packageNames.isEmpty() ? null : packageNames;
+    }
+
+    @Nullable
+    public Bitmap captureSplitScreen() {
+        final SurfaceControl rootLeash = mSplitMultiDisplayHelper
+                .getDisplayRootTaskLeash(DEFAULT_DISPLAY);
+        if (rootLeash == null || !rootLeash.isValid() || mSplitLayout == null) {
+            Log.w(TAG, "Unable to capture split screen: root is not ready");
+            return null;
+        }
+        final Rect rootBounds = mSplitLayout.getRootBounds();
+        if (rootBounds.isEmpty()) {
+            Log.w(TAG, "Unable to capture split screen: root bounds are empty");
+            return null;
+        }
+        final ScreenCapture.ScreenshotHardwareBuffer screenshot = ScreenCapture.captureLayers(
+                rootLeash, new Rect(0, 0, rootBounds.width(), rootBounds.height()), 1f);
+        if (screenshot == null || screenshot.containsSecureLayers()) {
+            Log.w(TAG, "Unable to capture split screen: capture failed or has secure layers");
+            return null;
+        }
+        return screenshot.asBitmap();
+    }
+
+    public void setSplitIconProvider(@Nullable SplitIconProvider splitIconProvider) {
+        mStageOrderoperator.getAllStages().forEach(
+                stage -> stage.setSplitIconProvider(splitIconProvider));
+        Log.d(TAG, "Set split icon provider for stageCount="
+                + mStageOrderoperator.getAllStages().size()
+                + " registered=" + (splitIconProvider != null));
     }
 
     private void finishStageDecorResize(SurfaceControl.Transaction t) {

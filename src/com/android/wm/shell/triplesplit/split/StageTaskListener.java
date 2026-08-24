@@ -30,6 +30,8 @@ import androidx.annotation.Nullable;
 import com.android.internal.util.ArrayUtils;
 import com.android.wm.shell.ShellTaskOrganizer;
 import com.android.wm.shell.common.SyncTransactionQueue;
+import com.android.wm.shell.triplesplit.split.util.ComponentUtils;
+import com.android.wm.shell.triplesplit.split.util.SplitIconProvider;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -39,7 +41,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class StageTaskListener implements ShellTaskOrganizer.TaskListener{
-    private static final String TAG = StageTaskListener.class.getSimpleName();
+    private static final String TAG = "SplitScreen";
 
 
     public interface StageListenerCallbacks {
@@ -94,8 +96,31 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener{
 
     int getTopVisibleChildTaskId() {
         final ActivityManager.RunningTaskInfo taskInfo =
-                getChildTaskInfo(t -> t.topActivityInfo != null);
+                getChildTaskInfo(t -> t.topActivityInfo != null
+                        && t.isVisible && t.isVisibleRequested);
         return taskInfo != null ? taskInfo.taskId : INVALID_TASK_ID;
+    }
+
+    @Nullable
+    ActivityManager.RunningTaskInfo getChildTaskInfo(int taskId) {
+        return mChildrenTaskInfo.get(taskId);
+    }
+
+    @Nullable
+    List<String> getChildTaskPackageNames() {
+        if (mChildrenTaskInfo.size() == 0) {
+            return null;
+        }
+
+        final List<String> packageNames = new ArrayList<>();
+        for (int i = 0; i < mChildrenTaskInfo.size(); i++) {
+            final String packageName =
+                    ComponentUtils.getPackageName(mChildrenTaskInfo.valueAt(i));
+            if (packageName != null && !packageName.isEmpty()) {
+                packageNames.add(packageName);
+            }
+        }
+        return packageNames.isEmpty() ? null : packageNames;
     }
 
     boolean isFocused() {
@@ -122,8 +147,8 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener{
     private ActivityManager.RunningTaskInfo getChildTaskInfo(
             Predicate<ActivityManager.RunningTaskInfo> predicate) {
         for (int i = mChildrenTaskInfo.size() - 1; i >= 0; i--) {
-            final ActivityManager.RunningTaskInfo taskInfo = mChildrenTaskInfo.get(i);
-            if (predicate.test(taskInfo)) {
+            final ActivityManager.RunningTaskInfo taskInfo = mChildrenTaskInfo.valueAt(i);
+            if (taskInfo != null && predicate.test(taskInfo)) {
                 return taskInfo;
             }
         }
@@ -155,6 +180,15 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener{
             Log.i(TAG, "onTaskAppeared rootTaskInfo=" + taskInfo + " leash=" + leash);
             mRootLeash = leash;
             mRootTaskInfo = taskInfo;
+            // Root tasks are created directly under the display area and WMS may show them before
+            // StageCoordinator has reparented and positioned both roots. Keep each root protected
+            // independently so neither can contribute a frame at its default surface position.
+            mSyncQueue.runInSync(t -> {
+                if (leash.isValid()) {
+                    t.hide(leash);
+                    t.setAlpha(leash, 0f);
+                }
+            });
             mSplitDecorManager.attachToHost(leash);
             mHasRootTask = true;
             mCallbacks.onRootTaskAppeared(taskInfo);
@@ -432,6 +466,12 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener{
     void reparentTopTask(WindowContainerTransaction wct) {
         wct.reparentTasks(null, mRootTaskInfo.token, CONTROLLED_WINDOWING_MODES,
                 CONTROLLED_ACTIVITY_TYPES, true, true);
+        reorderRootAndChildren(wct);
+    }
+
+    void reorderRootAndChildren(WindowContainerTransaction wct) {
+        wct.reorder(mRootTaskInfo.token, true);
+        doForAllChildTaskInfos(taskInfo -> wct.reorder(taskInfo.token, true));
     }
 
     void resetBounds(WindowContainerTransaction wct) {
@@ -441,17 +481,90 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener{
     }
 
     void setDecorBitmap(Bitmap bitmap) {
+        Log.d(TAG, "ResizeDecor setDecorBitmap stage=" + SplitScreen.stageTypeToString(mId)
+                + " bitmap=" + bitmap);
         mSplitDecorManager.setCustomBitmap(bitmap);
     }
 
+    void setSplitIconProvider(@Nullable SplitIconProvider splitIconProvider) {
+        mSplitDecorManager.setSplitIconProvider(splitIconProvider);
+    }
+
     void onResizing(Rect newBounds, SurfaceControl.Transaction t) {
-        if (!mHasChildren || getTopVisibleChildTaskId() == INVALID_TASK_ID) {
+        updateResizeDecor(newBounds, t, false);
+    }
+
+    void onStartResizing(Rect newBounds, SurfaceControl.Transaction t) {
+        updateResizeDecor(newBounds, t, true);
+    }
+
+    void onStartEntryDecor(Rect newBounds, SurfaceControl.Transaction t,
+            @Nullable String packageName) {
+        ActivityManager.RunningTaskInfo topTaskInfo = getChildTaskInfo(taskInfo ->
+                taskInfo.topActivityInfo != null
+                        && taskInfo.isVisible && taskInfo.isVisibleRequested);
+        if (topTaskInfo == null) {
+            // Entry decor is prepared while the split root may still be hidden. Package/icon
+            // lookup does not require task visibility, so fall back to an existing stage child.
+            topTaskInfo = getChildTaskInfo(taskInfo -> taskInfo.topActivityInfo != null);
+        }
+        final int decorTaskId = topTaskInfo != null ? topTaskInfo.taskId : INVALID_TASK_ID;
+        final SurfaceControl captureLeash = decorTaskId != INVALID_TASK_ID
+                ? mChildrenLeashes.get(decorTaskId) : null;
+        final String resolvedPackageName = packageName != null
+                ? packageName : ComponentUtils.getPackageName(topTaskInfo);
+        Log.d(TAG, "ResizeDecor onStartEntry stage=" + SplitScreen.stageTypeToString(mId)
+                + " decorTaskId=" + decorTaskId
+                + " taskVisible=" + (topTaskInfo != null && topTaskInfo.isVisible)
+                + " packageName=" + resolvedPackageName
+                + " captureLeash=" + captureLeash + " bounds=" + newBounds);
+        mSplitDecorManager.onStartResizing(newBounds, captureLeash, t, resolvedPackageName);
+    }
+
+    void onSwapResizing(int width, int height, SurfaceControl.Transaction t) {
+        mSplitDecorManager.onSwapResizing(width, height, t);
+    }
+
+    private void updateResizeDecor(Rect newBounds, SurfaceControl.Transaction t,
+            boolean forceStart) {
+        final int topVisibleTaskId = getTopVisibleChildTaskId();
+        if (!mHasChildren || topVisibleTaskId == INVALID_TASK_ID) {
+            Log.d(TAG, "ResizeDecor onResizing skipped stage="
+                    + SplitScreen.stageTypeToString(mId) + " hasChildren=" + mHasChildren
+                    + " childCount=" + mChildrenTaskInfo.size()
+                    + " topVisibleTaskId=" + topVisibleTaskId
+                    + " rootLeash=" + mRootLeash
+                    + " rootLeashValid=" + (mRootLeash != null && mRootLeash.isValid())
+                    + " rootInfo=" + mRootTaskInfo
+                    + " bounds=" + newBounds);
             return;
         }
-        mSplitDecorManager.onResizing(newBounds, t);
+        final ActivityManager.RunningTaskInfo topTaskInfo =
+                mChildrenTaskInfo.get(topVisibleTaskId);
+        final String packageName = ComponentUtils.getPackageName(topTaskInfo);
+        Log.d(TAG, "ResizeDecor onResizing stage=" + SplitScreen.stageTypeToString(mId)
+                + " childCount=" + mChildrenTaskInfo.size()
+                + " topVisibleTaskId=" + topVisibleTaskId
+                + " packageName=" + packageName
+                + " rootLeashValid=" + (mRootLeash != null && mRootLeash.isValid())
+                + " captureLeash=" + mChildrenLeashes.get(topVisibleTaskId)
+                + " captureLeashValid=" + (mChildrenLeashes.get(topVisibleTaskId) != null
+                        && mChildrenLeashes.get(topVisibleTaskId).isValid())
+                + " bounds=" + newBounds);
+        if (forceStart) {
+            mSplitDecorManager.onStartResizing(newBounds,
+                    mChildrenLeashes.get(topVisibleTaskId), t, packageName);
+        } else {
+            mSplitDecorManager.onResizing(newBounds,
+                    mChildrenLeashes.get(topVisibleTaskId), t, packageName);
+        }
     }
 
     void onResized(Rect stableBounds, SurfaceControl.Transaction t) {
+        Log.d(TAG, "ResizeDecor onResized stage=" + SplitScreen.stageTypeToString(mId)
+                + " childCount=" + mChildrenTaskInfo.size()
+                + " rootLeashValid=" + (mRootLeash != null && mRootLeash.isValid())
+                + " stableBounds=" + stableBounds);
         mSplitDecorManager.onResized(stableBounds, t);
     }
 

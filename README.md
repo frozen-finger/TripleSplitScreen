@@ -42,7 +42,11 @@ from `SplitScreenController.asSplitScreen()`.
 | `goToFullscreenFromSplit()` | Leaves split mode and returns to fullscreen. |
 | `moveTaskToFullscreen(taskId)` | Removes one task from split and promotes it. |
 | `setSplitScreenFocus(index)` | Gives input focus to pane 1, 2, or 3. |
+| `moveSplitToBack()` / `restoreSplitToFront()` | Temporarily backgrounds, then restores, the existing split root without relaunching tasks. |
+| `isTaskInSplitScreen(taskId)` / `getSplitScreenPackageNames(index)` | Queries split membership and packages hosted by a pane. |
 | `setStageDecorBitmap(index, bitmap)` | Supplies optional pane decoration content. |
+| `setSplitIconProvider(provider)` | Supplies a package-aware icon/cover for resize decor; it falls back to the stage bitmap, then a task screenshot. |
+| `captureSplitScreen()` | Captures the visible split root; returns `null` when unavailable or secure content prevents capture. |
 | `registerSplitScreenListener(listener, executor)` | Receives stage, bounds, task, and visibility changes on the supplied executor. |
 
 The pane indices are `SplitScreenConstants.SPLIT_INDEX_1`, `_2`, and `_3`;
