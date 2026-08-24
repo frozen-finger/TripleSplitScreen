@@ -1,0 +1,23 @@
+// AOSP/Soong build definition for the reusable triple-split implementation.
+// Add this directory to an AOSP source tree, then build with:
+//   m triple_splitscreen
+android_library {
+    name: "triple_splitscreen",
+    manifest: "AndroidManifest.xml",
+    srcs: [
+        "src/**/*.java",
+        "src/**/*.kt",
+    ],
+    resource_dirs: ["res"],
+
+    // The implementation is a privileged WMShell extension and uses hidden
+    // framework APIs. It is not suitable for an SDK application.
+    platform_apis: true,
+    min_sdk_version: "31",
+    libs: [
+        "WMShell",
+    ],
+    static_libs: [
+        "androidx.annotation_annotation",
+    ],
+}

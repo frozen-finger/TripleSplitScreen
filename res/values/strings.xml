@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">SplitScreenDemo</string>
+    <string name="accessibility_divider">divider</string>
+</resources>

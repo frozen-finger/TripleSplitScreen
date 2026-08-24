@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.android.wm.shell.triplesplit.split.view.DividerView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_height="match_parent"
+    android:layout_width="match_parent">
+
+    <FrameLayout
+        android:id="@+id/divider_bar"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <com.android.wm.shell.triplesplit.split.view.DividerHandleView
+            android:id="@+id/docked_divider_handle"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:contentDescription="@string/accessibility_divider"
+            android:background="@null"/>
+        <com.android.wm.shell.triplesplit.split.view.DividerRoundedCorner
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:id="@+id/docked_divider_rounded_corner"/>
+    </FrameLayout>
+</com.android.wm.shell.triplesplit.split.view.DividerView>

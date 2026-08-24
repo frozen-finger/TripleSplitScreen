@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Library manifest: this module intentionally declares no app components. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.android.wm.shell.triplesplit" />

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name = "docked_stack_divider_lift_elevation">4dp</dimen>
+    <dimen name="docked_divider_handle_width">16dp</dimen>
+    <dimen name="docked_divider_handle_height">2dp</dimen>
+
+    <dimen name="split_divider_handle_region_width">96dp</dimen>
+    <dimen name="split_divider_handle_region_height">48dp</dimen>
+    <!-- The divider touch zone height is intentionally halved in portrait to avoid colliding
+         with the app handle.-->
+    <dimen name="desktop_mode_portrait_split_divider_handle_region_height">24dp</dimen>
+
+    <!-- Divider handle size for split screen -->
+    <dimen name="split_divider_handle_width">4dp</dimen>
+    <dimen name="split_divider_handle_height">16dp</dimen>
+
+    <dimen name="split_divider_bar_width">12dp</dimen>
+    <dimen name="split_offscreen_touch_zone_width">32dp</dimen>
+    <dimen name="split_divider_corner_size">42dp</dimen>
+    <dimen name="default_minimal_size_resizable_task">220dp</dimen>
+    <dimen name="task_height_of_minimized_mode">80dp</dimen>
+    <item name="docked_stack_divider_fixed_ratio" type="fraction">34.15%</item>
+</resources>
