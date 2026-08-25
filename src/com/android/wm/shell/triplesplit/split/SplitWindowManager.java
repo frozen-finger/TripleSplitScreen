@@ -9,6 +9,8 @@ import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_NO_MOVE_ANIMA
 import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_TRUSTED_OVERLAY;
 import static android.view.WindowManager.LayoutParams.TYPE_DOCK_DIVIDER;
 
+import androidx.annotation.IdRes;
+import androidx.annotation.LayoutRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import android.content.Context;
@@ -40,6 +42,11 @@ public class SplitWindowManager extends WindowlessWindowManager {
     private SurfaceControlViewHost mViewHost;
     private SurfaceControl mLeash;
     private DividerView mDividerView;
+    private WindowManager.LayoutParams mLayoutParams;
+    @LayoutRes private int mDividerLayoutResId;
+    @IdRes private int mDividerBarId;
+    @IdRes private int mDividerHandleId;
+    @IdRes private int mDividerCornerId;
     private final int mId;
 
     private SurfaceControl.Transaction mSyncTransaction = null;
@@ -77,6 +84,31 @@ public class SplitWindowManager extends WindowlessWindowManager {
         setTouchRegion(mViewHost.getWindowToken().asBinder(), new Region(region));
     }
 
+    void setDividerLayout(@LayoutRes int layoutResId, @IdRes int dividerBarId,
+            @IdRes int dividerHandleId, @IdRes int dividerCornerId) {
+        mDividerLayoutResId = layoutResId;
+        mDividerBarId = dividerBarId;
+        mDividerHandleId = dividerHandleId;
+        mDividerCornerId = dividerCornerId;
+    }
+
+    void applyDimens(SplitScreenDimenConfig dimenConfig) {
+        if (mDividerView != null) {
+            mDividerView.applyDimens(dimenConfig);
+        }
+    }
+
+    void updateDividerBounds(@Nullable Rect dividerBounds) {
+        if (mViewHost == null || mLayoutParams == null || dividerBounds == null
+                || (mLayoutParams.width == dividerBounds.width()
+                && mLayoutParams.height == dividerBounds.height())) {
+            return;
+        }
+        mLayoutParams.width = dividerBounds.width();
+        mLayoutParams.height = dividerBounds.height();
+        mViewHost.relayout(mLayoutParams);
+    }
+
     /** Refreshes the divider input region after its leash moves without recreating the view. */
     public void updateTouchableRegion() {
         if (mDividerView != null) {
@@ -107,7 +139,8 @@ public class SplitWindowManager extends WindowlessWindowManager {
         return mLeash;
     }
 
-    void init(SplitLayout splitLayout, InsetsState insetsState, boolean isRestoring) {
+    void init(SplitLayout splitLayout, InsetsState insetsState, boolean isRestoring,
+            SplitScreenDimenConfig dimenConfig) {
         if (mDividerView != null || mViewHost != null) {
             throw new UnsupportedOperationException(
                     "Try to inflate divider view without release previous one"
@@ -116,8 +149,8 @@ public class SplitWindowManager extends WindowlessWindowManager {
         Log.i(TAG, "init splitWindowManager" + mId);
         mViewHost = new SurfaceControlViewHost(mContext, mContext.getDisplay(), this,
                 "SplitWindowManager");
-        mDividerView = (DividerView) LayoutInflater.from(mContext).inflate(
-                R.layout.split_divider, null);
+        mDividerView = inflateDividerView();
+        mDividerView.setDividerViewIds(mDividerBarId, mDividerHandleId, mDividerCornerId);
         Rect dividerBounds;
         if (mId == 1) {
             dividerBounds = splitLayout.getDividerBounds(true);
@@ -132,8 +165,20 @@ public class SplitWindowManager extends WindowlessWindowManager {
         lp.setTitle(mWindowName);
         lp.privateFlags |= PRIVATE_FLAG_NO_MOVE_ANIMATION | PRIVATE_FLAG_TRUSTED_OVERLAY;
         lp.accessibilityTitle = mContext.getResources().getString(R.string.accessibility_divider);
+        mLayoutParams = lp;
         mViewHost.setView(mDividerView, lp);
-        mDividerView.setup(splitLayout, this, mViewHost, insetsState, mId);
+        mDividerView.setup(splitLayout, this, mViewHost, insetsState, mId, dimenConfig);
+    }
+
+    private DividerView inflateDividerView() {
+        final int layoutResId = mDividerLayoutResId != 0
+                ? mDividerLayoutResId : R.layout.split_divider;
+        final Object view = LayoutInflater.from(mContext).inflate(layoutResId, null);
+        if (view instanceof DividerView) {
+            return (DividerView) view;
+        }
+        Log.w(TAG, "Custom divider layout must use DividerView as root; using default layout");
+        return (DividerView) LayoutInflater.from(mContext).inflate(R.layout.split_divider, null);
     }
 
     void release(SurfaceControl.Transaction t) {
@@ -149,6 +194,7 @@ public class SplitWindowManager extends WindowlessWindowManager {
             mSyncTransaction = null;
             mViewHost = null;
         }
+        mLayoutParams = null;
         mHasLastTouchRegion = false;
         mLastTouchRegion.setEmpty();
 
