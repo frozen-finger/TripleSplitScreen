@@ -47,6 +47,9 @@ from `SplitScreenController.asSplitScreen()`.
 | `setStageDecorBitmap(index, bitmap)` | Supplies optional pane decoration content. |
 | `setSplitIconProvider(provider)` | Supplies a package-aware icon/cover for resize decor; it falls back to the stage bitmap, then a task screenshot. |
 | `captureSplitScreen()` | Captures the visible split root; returns `null` when unavailable or secure content prevents capture. |
+| `setDividerLayout(layoutResId)` | Uses the same custom `DividerView` layout for both dividers; configure it before the divider hosts are first created. |
+| `setDividerLayout(layoutResId, barId, handleId, cornerId)` | As above, with optional child IDs for a custom divider bar, `DividerHandleView`, and `DividerRoundedCorner`; pass `0` to use default/type lookup. |
+| `setSplitScreenDimens(config)` | Applies one `SplitScreenDimenConfig` to both dividers and recomputes all three stage bounds. |
 | `registerSplitScreenListener(listener, executor)` | Receives stage, bounds, task, and visibility changes on the supplied executor. |
 
 The pane indices are `SplitScreenConstants.SPLIT_INDEX_1`, `_2`, and `_3`;
@@ -64,6 +67,35 @@ split.registerSplitScreenListener(listener, mainExecutor)
 split.enterSplitScreen(taskId, SplitScreenConstants.SPLIT_INDEX_2)
 split.setSplitScreenFocus(SplitScreenConstants.SPLIT_INDEX_2)
 ```
+
+### Divider customization
+
+Triple split always uses two divider hosts. Divider layout and dimension APIs apply the same
+contract to both hosts so their interaction and appearance remain consistent. A custom layout must
+use `DividerView` as its root. If it has custom child IDs, call the four-argument
+`setDividerLayout` before entering split; changing the layout after divider hosts exist takes effect
+when they are recreated.
+
+```kotlin
+split.setDividerLayout(R.layout.my_triple_split_divider,
+    R.id.divider_bar, R.id.divider_handle, R.id.divider_corners)
+
+val dividerConfig = SplitScreenDimenConfig.Builder()
+    .setStageGapWidth(R.dimen.my_stage_gap)
+    .setDividerVisualWidth(R.dimen.my_divider_bar_width)
+    .setDividerHandleRegionWidth(R.dimen.my_divider_touch_width)
+    .setDividerHandleWidth(R.dimen.my_divider_handle_width)
+    .setDividerHandleHeight(R.dimen.my_divider_handle_height)
+    .setDividerCornerSize(R.dimen.my_divider_corner_size)
+    .build()
+split.setSplitScreenDimens(dividerConfig)
+```
+
+Every builder value is an Android `@dimen` resource ID. `setStageGapWidth` changes the real space
+between adjacent panes; `setDividerVisualWidth` changes only the drawn bar; and
+`setDividerHandleRegionWidth` controls the wider touch window. `setDividerBarWidth` is retained as
+a legacy fallback for both stage gap and visual width. A `0dp` visual width hides the divider bar
+while preserving the handle and touch region.
 
 All API calls must originate from privileged SystemUI/WMShell code with the
 required task-management permissions. Task IDs and pending intents must refer
