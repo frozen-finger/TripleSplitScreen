@@ -20,7 +20,7 @@ import androidx.annotation.Nullable;
 import com.android.wm.shell.triplesplit.R;
 
 public class DividerRoundedCorner extends View {
-    private final int mDividerWidth;
+    private int mDividerWidth;
     private final Paint mDividerBarBackground;
     private final Point mStartPos = new Point();
     private InvertedRoundedCornerDrawInfo mTopLeftCorner;
@@ -39,6 +39,10 @@ public class DividerRoundedCorner extends View {
 
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        rebuildCornerInfo();
+    }
+
+    private void rebuildCornerInfo() {
         mTopLeftCorner = new InvertedRoundedCornerDrawInfo(POSITION_TOP_LEFT);
         mTopRightCorner = new InvertedRoundedCornerDrawInfo(POSITION_TOP_RIGHT);
         mBottomLeftCorner = new InvertedRoundedCornerDrawInfo(POSITION_BOTTOM_LEFT);
@@ -78,6 +82,15 @@ public class DividerRoundedCorner extends View {
 
     public void setRadiusResource(int radiusResId) {
         mRadiusResourceId = radiusResId;
+        if (isAttachedToWindow()) {
+            rebuildCornerInfo();
+        }
+        invalidate();
+    }
+
+    public void setDividerWidth(int dividerWidth) {
+        mDividerWidth = dividerWidth;
+        invalidate();
     }
 
     public void setRoundCornerColor(int cornerColor, boolean invalidateView) {
