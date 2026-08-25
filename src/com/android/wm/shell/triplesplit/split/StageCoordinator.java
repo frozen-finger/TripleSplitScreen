@@ -84,6 +84,8 @@ import android.window.WindowContainerToken;
 import android.window.WindowContainerTransaction;
 
 import androidx.annotation.CallSuper;
+import androidx.annotation.IdRes;
+import androidx.annotation.LayoutRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
@@ -143,6 +145,11 @@ public class StageCoordinator extends StageCoordinatorAbstract{
 
     private final int mDisplayId;
     private SplitLayout mSplitLayout;
+    private SplitScreenDimenConfig mSplitScreenDimenConfig = SplitScreenDimenConfig.DEFAULT;
+    @LayoutRes private int mDividerLayoutResId;
+    @IdRes private int mDividerBarId;
+    @IdRes private int mDividerHandleId;
+    @IdRes private int mDividerCornerId;
     private final IActivityTaskManager mActivityTaskManager;
     private boolean mLeftDividerVisible;
     private boolean mRightDividerVisible;
@@ -2246,6 +2253,11 @@ public class StageCoordinator extends StageCoordinatorAbstract{
                     taskInfo.configuration, this, mParentContainerCallbacks,
                     mDisplayController, mDisplayImeController, mTaskOrganzier,
                     mSplitState, mMainHandler);
+            mSplitLayout.setSplitScreenDimens(mSplitScreenDimenConfig);
+            if (mDividerLayoutResId != 0) {
+                mSplitLayout.setDividerLayout(mDividerLayoutResId, mDividerBarId,
+                        mDividerHandleId, mDividerCornerId);
+            }
             mDisplayInsetsController.addInsetsChangedListener(mDisplayId, mSplitLayout);
         }
         onRootTaskAppeared(taskInfo);
@@ -2658,6 +2670,30 @@ public class StageCoordinator extends StageCoordinatorAbstract{
         Log.d(TAG, "Set split icon provider for stageCount="
                 + mStageOrderoperator.getAllStages().size()
                 + " registered=" + (splitIconProvider != null));
+    }
+
+    public void setDividerLayout(@LayoutRes int layoutResId) {
+        setDividerLayout(layoutResId, 0, 0, 0);
+    }
+
+    public void setDividerLayout(@LayoutRes int layoutResId, @IdRes int dividerBarId,
+            @IdRes int dividerHandleId, @IdRes int dividerCornerId) {
+        mDividerLayoutResId = layoutResId;
+        mDividerBarId = dividerBarId;
+        mDividerHandleId = dividerHandleId;
+        mDividerCornerId = dividerCornerId;
+        if (mSplitLayout != null) {
+            mSplitLayout.setDividerLayout(layoutResId, dividerBarId, dividerHandleId,
+                    dividerCornerId);
+        }
+    }
+
+    public void setSplitScreenDimens(@Nullable SplitScreenDimenConfig dimenConfig) {
+        mSplitScreenDimenConfig = dimenConfig != null ? dimenConfig
+                : SplitScreenDimenConfig.DEFAULT;
+        if (mSplitLayout != null) {
+            mSplitLayout.setSplitScreenDimens(mSplitScreenDimenConfig);
+        }
     }
 
     private void finishStageDecorResize(SurfaceControl.Transaction t) {
