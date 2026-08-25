@@ -3,6 +3,7 @@ package com.android.wm.shell.triplesplit.split.view;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
+import androidx.annotation.IdRes;
 import androidx.annotation.Nullable;
 import android.content.Context;
 import android.graphics.Canvas;
@@ -26,6 +27,7 @@ import android.widget.FrameLayout;
 import com.android.wm.shell.animation.Interpolators;
 import com.android.wm.shell.triplesplit.R;
 import com.android.wm.shell.triplesplit.split.SplitLayout;
+import com.android.wm.shell.triplesplit.split.SplitScreenDimenConfig;
 import com.android.wm.shell.triplesplit.split.SplitWindowManager;
 import com.android.wm.shell.triplesplit.split.util.DividerSnapAlgorithm.SnapTarget;
 import com.android.wm.shell.triplesplit.split.util.InputDirection;
@@ -65,20 +67,33 @@ public class DividerView extends FrameLayout implements View.OnTouchListener {
 
     private final Rect mDividerBounds = new Rect();
     private final Rect mTempRect = new Rect();
-    private FrameLayout mDividerBar;
+    @IdRes private int mDividerBarId;
+    @IdRes private int mDividerHandleId;
+    @IdRes private int mDividerCornerId;
+    private View mDividerBar;
     private int mId;
 
     static final Property<DividerView, Integer> DIVIDER_HEIGHT_PROPERTY =
             new Property<DividerView, Integer>(Integer.class, "height") {
                 @Override
                 public Integer get(DividerView object) {
+                    if (object.mDividerBar == null || object.mDividerBar.getLayoutParams() == null) {
+                        return 0;
+                    }
                     return object.mDividerBar.getLayoutParams().height;
                 }
 
                 @Override
                 public void set(DividerView object, Integer value) {
-                    ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams)
-                            object.mDividerBar.getLayoutParams();
+                    if (object.mDividerBar == null || object.mDividerBar.getLayoutParams() == null) {
+                        return;
+                    }
+                    ViewGroup.LayoutParams lp = object.mDividerBar.getLayoutParams();
+                    if (lp.height == value) {
+                        return;
+                    }
+                    lp.height = value;
+                    object.mDividerBar.setLayoutParams(lp);
                 }
             };
 
@@ -114,6 +129,13 @@ public class DividerView extends FrameLayout implements View.OnTouchListener {
 
     public void setup(SplitLayout layout, SplitWindowManager splitWindowManager,
                       SurfaceControlViewHost viewHost, InsetsState insetsState, int id) {
+        setup(layout, splitWindowManager, viewHost, insetsState, id,
+                SplitScreenDimenConfig.DEFAULT);
+    }
+
+    public void setup(SplitLayout layout, SplitWindowManager splitWindowManager,
+                      SurfaceControlViewHost viewHost, InsetsState insetsState, int id,
+                      SplitScreenDimenConfig dimenConfig) {
         mSplitLayout = layout;
         mSplitWindowManager = splitWindowManager;
         mViewHost = viewHost;
@@ -123,7 +145,29 @@ public class DividerView extends FrameLayout implements View.OnTouchListener {
             mDividerBounds.set(layout.getDividerBounds(false));
         }
         mId = id;
+        applyDimens(dimenConfig != null ? dimenConfig : SplitScreenDimenConfig.DEFAULT);
         onInsetsChanged(insetsState, false/* animate */);
+    }
+
+    public void setDividerViewIds(@IdRes int dividerBarId, @IdRes int dividerHandleId,
+            @IdRes int dividerCornerId) {
+        mDividerBarId = dividerBarId;
+        mDividerHandleId = dividerHandleId;
+        mDividerCornerId = dividerCornerId;
+        resolveDividerViews();
+    }
+
+    public void applyDimens(SplitScreenDimenConfig dimenConfig) {
+        if (mHandle != null) {
+            mHandle.setDimens(dimenConfig.getDividerHandleWidth(getContext()),
+                    dimenConfig.getDividerHandleHeight(getContext()));
+        }
+        if (mCorners != null) {
+            mCorners.setDividerWidth(dimenConfig.getDividerVisualWidth(getContext()));
+            mCorners.setRadiusResource(dimenConfig.getDividerCornerSizeResId());
+        }
+        requestLayout();
+        invalidate();
     }
 
     public void onInsetsChanged(InsetsState insetsState, boolean animate) {
@@ -135,9 +179,7 @@ public class DividerView extends FrameLayout implements View.OnTouchListener {
     @Override
     protected void onFinishInflate() {
         super.onFinishInflate();
-        mDividerBar = findViewById(R.id.divider_bar);
-        mHandle = findViewById(R.id.docked_divider_handle);
-        mCorners = findViewById(R.id.docked_divider_rounded_corner);
+        resolveDividerViews();
         mTouchElevation = 10;
         mDoubleTapDetector = new GestureDetector(getContext(), new DoubleTapListener());
         mInteractive = true;
@@ -149,6 +191,58 @@ public class DividerView extends FrameLayout implements View.OnTouchListener {
         mPaint.setStyle(Paint.Style.FILL);
     }
 
+    private void resolveDividerViews() {
+        mDividerBar = findConfiguredView(mDividerBarId, R.id.divider_bar);
+        if (mDividerBar == null && getChildCount() > 0) {
+            mDividerBar = getChildAt(0);
+        }
+        mHandle = findConfiguredViewOfType(mDividerHandleId, R.id.docked_divider_handle,
+                DividerHandleView.class);
+        if (mHandle == null) {
+            mHandle = findFirstChildOfType(this, DividerHandleView.class);
+        }
+        mCorners = findConfiguredViewOfType(mDividerCornerId, R.id.docked_divider_rounded_corner,
+                DividerRoundedCorner.class);
+        if (mCorners == null) {
+            mCorners = findFirstChildOfType(this, DividerRoundedCorner.class);
+        }
+    }
+
+    @Nullable
+    private View findConfiguredView(@IdRes int configuredId, @IdRes int defaultId) {
+        View view = configuredId != 0 ? findViewById(configuredId) : null;
+        return view != null ? view : findViewById(defaultId);
+    }
+
+    @Nullable
+    private <T extends View> T findConfiguredViewOfType(@IdRes int configuredId,
+            @IdRes int defaultId, Class<T> type) {
+        T view = findViewByIdOfType(configuredId, type);
+        return view != null ? view : findViewByIdOfType(defaultId, type);
+    }
+
+    @Nullable
+    private <T extends View> T findViewByIdOfType(@IdRes int id, Class<T> type) {
+        if (id == 0) return null;
+        View view = findViewById(id);
+        if (view == null) return null;
+        if (type.isInstance(view)) return type.cast(view);
+        Log.w(TAG, "Divider child id=" + id + " is not " + type.getSimpleName());
+        return null;
+    }
+
+    @Nullable
+    private static <T extends View> T findFirstChildOfType(View view, Class<T> type) {
+        if (type.isInstance(view)) return type.cast(view);
+        if (!(view instanceof ViewGroup)) return null;
+        ViewGroup group = (ViewGroup) view;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            T child = findFirstChildOfType(group.getChildAt(i), type);
+            if (child != null) return child;
+        }
+        return null;
+    }
+
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
@@ -157,7 +251,7 @@ public class DividerView extends FrameLayout implements View.OnTouchListener {
         }
 
         if (changed) {
-            int dividerSize = getResources().getDimensionPixelSize(R.dimen.split_divider_bar_width);
+            int dividerSize = mSplitLayout.getDividerVisualWidth();
             left = (getWidth() - dividerSize) / 2;
             top = 0;
             right = left + dividerSize;
