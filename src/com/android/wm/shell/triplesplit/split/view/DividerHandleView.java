@@ -75,8 +75,19 @@ public class DividerHandleView extends View {
             };
 
     private void updateDimens() {
-        mWidth = getResources().getDimensionPixelSize(R.dimen.split_divider_handle_width);
-        mHeight = getResources().getDimensionPixelSize(R.dimen.split_divider_handle_height);
+        applyDimens(getResources().getDimensionPixelSize(R.dimen.split_divider_handle_width),
+                getResources().getDimensionPixelSize(R.dimen.split_divider_handle_height));
+    }
+
+    public void setDimens(int width, int height) {
+        applyDimens(width, height);
+        requestLayout();
+        invalidate();
+    }
+
+    private void applyDimens(int width, int height) {
+        mWidth = width;
+        mHeight = height;
         mCurrentHeight = mHeight;
         mCurrentWidth = mWidth;
         mTouchingWidth = mWidth * 2;
