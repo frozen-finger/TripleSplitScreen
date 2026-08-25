@@ -2,6 +2,8 @@ package com.android.wm.shell.triplesplit.split;
 
 import android.annotation.IntDef;
 
+import androidx.annotation.IdRes;
+import androidx.annotation.LayoutRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import android.app.ActivityManager;
@@ -106,4 +108,17 @@ public interface SplitScreen {
 
     /** Sets the icon/cover provider used by every stage during resize decor animations. */
     void setSplitIconProvider(@Nullable SplitIconProvider splitIconProvider);
+
+    /** Sets one custom DividerView layout for both triple-split dividers. */
+    void setDividerLayout(@LayoutRes int layoutResId);
+
+    /**
+     * Sets a custom DividerView layout for both dividers and optional bar, handle, and corner ids.
+     * Pass {@code 0} for an id to use default/type lookup; call before divider hosts are created.
+     */
+    void setDividerLayout(@LayoutRes int layoutResId, @IdRes int dividerBarId,
+            @IdRes int dividerHandleId, @IdRes int dividerCornerId);
+
+    /** Applies one dimension configuration to both dividers and all three stage bounds. */
+    void setSplitScreenDimens(@Nullable SplitScreenDimenConfig dimenConfig);
 }
