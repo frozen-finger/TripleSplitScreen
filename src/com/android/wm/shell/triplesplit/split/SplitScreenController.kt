@@ -28,7 +28,9 @@ import android.widget.Adapter
 import android.window.WindowContainerToken
 import android.window.WindowContainerTransaction
 import androidx.annotation.BinderThread
+import androidx.annotation.IdRes
 import androidx.annotation.IntDef
+import androidx.annotation.LayoutRes
 import com.android.wm.shell.RootTaskDisplayAreaOrganizer
 import com.android.wm.shell.ShellTaskOrganizer
 import com.android.wm.shell.common.DisplayController
@@ -324,6 +326,20 @@ class SplitScreenController(
 
     fun setSplitIconProvider(splitIconProvider: SplitIconProvider?) {
         mStageCoordinator.setSplitIconProvider(splitIconProvider)
+    }
+
+    fun setDividerLayout(@LayoutRes layoutResId: Int) {
+        mStageCoordinator.setDividerLayout(layoutResId)
+    }
+
+    fun setDividerLayout(@LayoutRes layoutResId: Int, @IdRes dividerBarId: Int,
+                         @IdRes dividerHandleId: Int, @IdRes dividerCornerId: Int) {
+        mStageCoordinator.setDividerLayout(layoutResId, dividerBarId, dividerHandleId,
+            dividerCornerId)
+    }
+
+    fun setSplitScreenDimens(dimenConfig: SplitScreenDimenConfig?) {
+        mStageCoordinator.setSplitScreenDimens(dimenConfig)
     }
 
     fun moveTaskToFullScreen(taskId: Int, @ExitReason exitReason: Int) {
@@ -696,6 +712,26 @@ class SplitScreenController(
         override fun setSplitIconProvider(splitIconProvider: SplitIconProvider?) {
             mainExecutor.execute {
                 this@SplitScreenController.setSplitIconProvider(splitIconProvider)
+            }
+        }
+
+        override fun setDividerLayout(layoutResId: Int) {
+            mainExecutor.execute {
+                this@SplitScreenController.setDividerLayout(layoutResId)
+            }
+        }
+
+        override fun setDividerLayout(layoutResId: Int, dividerBarId: Int,
+                                      dividerHandleId: Int, dividerCornerId: Int) {
+            mainExecutor.execute {
+                this@SplitScreenController.setDividerLayout(layoutResId, dividerBarId,
+                    dividerHandleId, dividerCornerId)
+            }
+        }
+
+        override fun setSplitScreenDimens(dimenConfig: SplitScreenDimenConfig?) {
+            mainExecutor.execute {
+                this@SplitScreenController.setSplitScreenDimens(dimenConfig)
             }
         }
 
