@@ -58,6 +58,8 @@ import android.view.animation.Interpolator;
 import android.window.WindowContainerToken;
 import android.window.WindowContainerTransaction;
 
+import androidx.annotation.IdRes;
+import androidx.annotation.LayoutRes;
 import androidx.annotation.Nullable;
 
 import com.android.internal.jank.InteractionJankMonitor;
@@ -114,6 +116,10 @@ public class SplitLayout implements DisplayInsetsController.OnInsetsChangedListe
     private int mDividerWindowWidth;
     private int mDividerInsets;
     private int mDividerSize;
+    /** Width of the divider bar drawn inside the larger touch window. */
+    private int mDividerVisualWidth;
+    /** Width of the divider window excluding its gesture/corner insets. */
+    private int mDividerWindowContentWidth;
     /** Pixel distance reserved at both display edges so divider touch does not compete with Back. */
     private int mDividerEdgeGestureInset;
     private int mOffscreenTouchZoneWidth;
@@ -159,6 +165,7 @@ public class SplitLayout implements DisplayInsetsController.OnInsetsChangedListe
     private final InsetsState mInsetsState = new InsetsState();
 
     private Context mContext;
+    private SplitScreenDimenConfig mDimenConfig = SplitScreenDimenConfig.DEFAULT;
     DividerSnapAlgorithm mDividerSnapAlgorithm;
     private WindowContainerToken mWinToken1;
     private WindowContainerToken mWinToken2;
@@ -230,17 +237,40 @@ public class SplitLayout implements DisplayInsetsController.OnInsetsChangedListe
         corner = display.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_LEFT);
         radius = corner != null ? Math.max(radius, corner.getRadius()) : radius;
 
-        mDividerSize = resources.getDimensionPixelSize(R.dimen.split_divider_bar_width);
-        final int touchRegionWidth =
-                resources.getDimensionPixelSize(R.dimen.split_divider_handle_region_width);
-        final int touchRegionInset = Math.max(0, (touchRegionWidth - mDividerSize) / 2);
-        // Keep the visible divider narrow, but make the window/touch region finger-friendly.
+        mDividerSize = mDimenConfig.getStageGapWidth(context);
+        mDividerVisualWidth = mDimenConfig.getDividerVisualWidth(context);
+        mDividerWindowContentWidth = Math.max(mDividerSize, mDividerVisualWidth);
+        final int touchRegionWidth = mDimenConfig.getDividerHandleRegionWidth(context);
+        final int touchRegionInset = Math.max(0,
+                (touchRegionWidth - mDividerWindowContentWidth) / 2);
         mDividerInsets = Math.max(Math.max(dividerInset, radius), touchRegionInset);
-        mDividerWindowWidth = mDividerSize + 2 * mDividerInsets;
+        mDividerWindowWidth = mDividerWindowContentWidth + 2 * mDividerInsets;
         mDividerEdgeGestureInset = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,
                 DIVIDER_EDGE_GESTURE_INSET_DP, resources.getDisplayMetrics());
-        mOffscreenTouchZoneWidth =
-                resources.getDimensionPixelSize(R.dimen.split_offscreen_touch_zone_width);
+        mOffscreenTouchZoneWidth = mDimenConfig.getOffscreenTouchZoneWidth(context);
+    }
+
+    public int getDividerVisualWidth() {
+        return mDividerVisualWidth;
+    }
+
+    public void setSplitScreenDimens(@Nullable SplitScreenDimenConfig dimenConfig) {
+        mDimenConfig = dimenConfig != null ? dimenConfig : SplitScreenDimenConfig.DEFAULT;
+        updateDividerConfig(mContext);
+        updateLayouts();
+        mSplitWindowManager1.updateDividerBounds(mDividerBounds1);
+        mSplitWindowManager2.updateDividerBounds(mDividerBounds2);
+        mSplitWindowManager1.applyDimens(mDimenConfig);
+        mSplitWindowManager2.applyDimens(mDimenConfig);
+        mSplitLayoutHandler.onLayoutSizeChanged(this);
+    }
+
+    public void setDividerLayout(@LayoutRes int layoutResId, @IdRes int dividerBarId,
+            @IdRes int dividerHandleId, @IdRes int dividerCornerId) {
+        mSplitWindowManager1.setDividerLayout(layoutResId, dividerBarId, dividerHandleId,
+                dividerCornerId);
+        mSplitWindowManager2.setDividerLayout(layoutResId, dividerBarId, dividerHandleId,
+                dividerCornerId);
     }
 
     public Rect getDisplayStableInsets(Context context) {
@@ -630,10 +660,12 @@ public class SplitLayout implements DisplayInsetsController.OnInsetsChangedListe
         bounds2.set(mRootBounds);
         bounds3.set(mRootBounds);
         position1 += mRootBounds.left;
-        dividerBounds1.left = position1 - mDividerInsets;
+        dividerBounds1.left = position1 + (mDividerSize - mDividerWindowContentWidth) / 2
+                - mDividerInsets;
         dividerBounds1.right = dividerBounds1.left + mDividerWindowWidth;
         position2 += mRootBounds.left;
-        dividerBounds2.left = position2 - mDividerInsets;
+        dividerBounds2.left = position2 + (mDividerSize - mDividerWindowContentWidth) / 2
+                - mDividerInsets;
         dividerBounds2.right = dividerBounds2.left + mDividerWindowWidth;
         bounds1.right = position1;
         bounds2.left = bounds1.right + mDividerSize;
@@ -691,12 +723,14 @@ public class SplitLayout implements DisplayInsetsController.OnInsetsChangedListe
     }
 
     private void pinLeftDividerToRootEdge(Rect dividerBounds) {
-        dividerBounds.left = mRootBounds.left - mDividerInsets;
+        dividerBounds.left = mRootBounds.left
+                + (mDividerSize - mDividerWindowContentWidth) / 2 - mDividerInsets;
         dividerBounds.right = dividerBounds.left + mDividerWindowWidth;
     }
 
     private void pinRightDividerToRootEdge(Rect dividerBounds) {
-        dividerBounds.left = mRootBounds.right - mDividerInsets - mDividerSize;
+        dividerBounds.left = mRootBounds.right - mDividerSize
+                + (mDividerSize - mDividerWindowContentWidth) / 2 - mDividerInsets;
         dividerBounds.right = dividerBounds.left + mDividerWindowWidth;
     }
 
@@ -736,8 +770,8 @@ public class SplitLayout implements DisplayInsetsController.OnInsetsChangedListe
         runOnLayoutThreadBlocking(() -> {
             if (mInitialized) return;
             mInitialized = true;
-            mSplitWindowManager1.init(this, mInsetsState, false);
-            mSplitWindowManager2.init(this, mInsetsState, false);
+            mSplitWindowManager1.init(this, mInsetsState, false, mDimenConfig);
+            mSplitWindowManager2.init(this, mInsetsState, false, mDimenConfig);
             populateTouchZones();
         });
     }
@@ -746,8 +780,8 @@ public class SplitLayout implements DisplayInsetsController.OnInsetsChangedListe
         runOnLayoutThreadBlocking(() -> {
             if (!mInitialized) {
                 mInitialized = true;
-                mSplitWindowManager1.init(this, mInsetsState, false);
-                mSplitWindowManager2.init(this, mInsetsState, false);
+                mSplitWindowManager1.init(this, mInsetsState, false, mDimenConfig);
+                mSplitWindowManager2.init(this, mInsetsState, false, mDimenConfig);
                 populateTouchZones();
                 return;
             }
@@ -757,8 +791,8 @@ public class SplitLayout implements DisplayInsetsController.OnInsetsChangedListe
                 mImePositionProcessor.reset();
             }
 
-            mSplitWindowManager1.init(this, mInsetsState, true);
-            mSplitWindowManager2.init(this, mInsetsState, true);
+            mSplitWindowManager1.init(this, mInsetsState, true, mDimenConfig);
+            mSplitWindowManager2.init(this, mInsetsState, true, mDimenConfig);
             populateTouchZones();
         });
 
